@@ -1,0 +1,90 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+import asyncpg
+import os
+
+# Use the Transaction Pooler URL (Port 6543) from Supabase settings
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Startup and Shutdown commands
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    app.state.pool = await asyncpg.create_pool(DATABASE_URL, min_size= 1, max_size= 5, statement_cache_size= 0)    
+    yield
+    # Shutdown
+    await app.state.pool.close()
+
+app = FastAPI(lifespan = lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+async def root():
+    return {"message": "Service Line API is running"}
+
+@app.get("/nearest")
+async def nearest(lon: float, lat: float, k: int = 2):
+    """
+    Finds k unique addresses nearest to the point, then returns all service 
+    lines associated with those addresses.
+    """
+    async with app.state.pool.acquire() as conn:
+        # SQL LOGIC:
+        # 1. The Subquery finds the k unique addresses closest to the user.
+        # 2. The Main Query joins those addresses back to the table to get ALL lines at those addresses.
+        # 3. ST_Distance calculates the distance in METERS
+        query = """
+            WITH unique_addresses AS (
+                SELECT "Address", 
+                       geometry <-> ST_SetSRID(ST_MakePoint($1::double precision, $2::double precision), 4326)::geography as dist
+                FROM (
+                    SELECT DISTINCT "Address", geometry 
+                    FROM locations
+                ) sub
+                ORDER BY dist
+                LIMIT $3::integer
+            )
+            SELECT 
+                l."Address",
+                l."Gooseneck/ Pigtail",
+                l."PWS-Owned Service Line Material",
+                l."Customer Side Service Line Material",
+                l."Classification for Entire Service Line",
+                l."Source of Information Used for Service Line Identification - PW",
+                l."Source of Information Used for Service Line Identification - Cu",
+                ST_X(l.geometry::geometry) as lon,
+                ST_Y(l.geometry::geometry) as lat,
+                ST_Distance(l.geometry, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) * 3.28084 as dist_ft
+            FROM locations l
+            JOIN unique_addresses ua ON l."Address" = ua."Address"
+            ORDER BY 10 ASC;
+            """
+        
+        print(f"DEBUG: Searching for Lon: {lon}, Lat: {lat}, K: {k}")
+        rows = await conn.fetch(query, lon, lat, k)
+        print(f"DEBUG: Database returned {len(rows)} rows")
+
+        results = []
+        for row in rows:
+            results.append({
+                "address": str(row["Address"] or "Unknown Address"),
+                "gooseneck/pigtail": str(row["Gooseneck/ Pigtail"] or "Unknown"),
+                "public_material": str(row["PWS-Owned Service Line Material"] or "Unknown"),
+                "private_material": str(row["Customer Side Service Line Material"] or "Unknown"),
+                "classification for entire service line": str(row["Classification for Entire Service Line"] or "Unknown"),
+                "public_verification": str(row["Source of Information Used for Service Line Identification - PW"] or "Unknown"),
+                "private_verification": str(row["Source of Information Used for Service Line Identification - Cu"] or "Unknown"),
+                "latitude": float(row["lat"] or 0.0),
+                "longitude": float(row["lon"] or 0.0),
+                "distance": float(row["dist_ft"] or 0.0)
+            })
+
+        return {"nearest_lines": results}
