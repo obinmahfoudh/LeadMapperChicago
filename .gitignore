@@ -1,1 +1,10 @@
+
 .env
+__pycache__/
+venv/
+
+
+# Intermediate outputs from code
+outputs/geojsons/
+outputs/maps/
+
