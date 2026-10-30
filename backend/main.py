@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncpg
@@ -29,6 +29,30 @@ app.add_middleware(
 @app.get("/")
 async def root():
     return {"message": "Service Line API is running"}
+
+
+@app.get("/healthz")
+async def health_check():
+    health_status = {"backend": "ok", "database": "unknown"}
+    try:
+        async with app.state.pool.acquire() as conn:
+            query = """
+                SELECT "Address" 
+                FROM locations
+                WHERE "Unique ID" = 1
+                LIMIT 1;
+            """
+            await conn.fetch(query)
+            
+            health_status["database"] = "ok"
+            return health_status
+    except Exception as e:
+        health_status["database"] = "error"
+        health_status["error_detail"] = str(e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=health_status
+        )
 
 @app.get("/nearest")
 async def nearest(lon: float, lat: float, k: int = 2):
