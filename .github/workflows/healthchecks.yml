@@ -1,0 +1,46 @@
+name: Backend & Database Health Check
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  
+  workflow_dispatch:       
+  push:
+    branches: [ main ]
+
+jobs:
+  ping-healthz:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping FastAPI & Supabase via /healthz
+        env:
+          BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL }}
+        run: |
+          echo "Pinging FastAPI end-to-end health check..."
+          
+          # Make curl call to server and save it to RESPONSE. response \n code
+          RESPONSE=$(curl -s -w "\n%{http_code}" "$BACKEND_URL/healthz")         
+
+          # HTTP_BODY gets the RESPONSE and deletes the lst line
+          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+
+          # HTTP_STATUS gets the RESPONSE and keeps only the last line
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "System Healthy: FastAPI and Supabase are operational (HTTP 200)"
+          else
+            echo "::error::Health check failed with status HTTP $HTTP_STATUS"
+            
+            # Use jq to extract 'error_detail' if present in the JSON body
+            ERROR_MSG=$(echo "$HTTP_BODY" | jq -r '.detail.error_detail // "No error_detail key found in response"')
+            
+            echo "--------------------------------------------------"
+            echo "ERROR DETAIL FROM BACKEND:"
+            echo "$ERROR_MSG"
+            echo "--------------------------------------------------"
+            echo "FULL RESPONSE BODY:"
+            echo "$HTTP_BODY"
+            echo "--------------------------------------------------"
+            
+            exit 1
+          fi
