@@ -81,9 +81,10 @@ def model_to_hundred_feet(model_path=None, model=None):
     ax.set_axis_off()
     plt.tight_layout()
     plt.savefig(config.MAPS_OUT + "Model Score per 100 ft.png")
-    plt.show()
+    #plt.show()
     
 def main():
+    print("Running PerHundredFeet.py")
     model_to_hundred_feet(model_path= config.STREET_MODEL)
 
 if __name__ == "__main__":

@@ -27,6 +27,7 @@ def project_model_to_street(model_path = None, model= None):
 
     print("Performing spatial join") 
     # Project block group model to street crs to do a spatial join
+    assert gdf_streets.crs is not None, "gdf_streets has no CRS set"
     model = model.to_crs(gdf_streets.crs)
     segments_with_score = gpd.sjoin(
         gdf_streets,
