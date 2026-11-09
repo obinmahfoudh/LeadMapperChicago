@@ -1,8 +1,8 @@
 # priority_model/__main__.py
 import config
-from . import model_to_hundred_feet
-from . import project_model_to_street
-from . import project_service_lines_hundred_ft
+from .PerHundredFeet import model_to_hundred_feet
+from .ProjectModelToStreets import project_model_to_street
+from .ServiceLinesPerHundredFeet import project_service_lines_hundred_ft
 
 def main():
     print("Excecuting StreetViews...")
