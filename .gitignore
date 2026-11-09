@@ -3,9 +3,9 @@
 __pycache__/
 venv/
 .vscode
-
+.continue/
 
 # Intermediate outputs from code
-outputs/geojsons/
-outputs/maps/
+**/outputs/geojsons/*
+**/outputs/maps/*
 
